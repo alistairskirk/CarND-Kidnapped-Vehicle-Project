@@ -38,6 +38,9 @@ class ParticleFilter {
 	
 	//timestep tracker
 	int timestep_count;
+
+	//previous yawrate tracker
+	double prev_yawrate;
 	
 public:
 	

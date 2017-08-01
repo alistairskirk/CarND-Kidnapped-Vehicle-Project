@@ -25,7 +25,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	//   x, y, theta and their uncertainties from GPS) and all weights to 1. 
 	// Add random Gaussian noise to each particle.
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
-	num_particles = 10;
+	num_particles = 100;
 	default_random_engine generator; //need a generator for the Gaussian noise
 	// GPS measurement uncertainty std[] [x [m], y [m], theta [rad]]
 	normal_distribution<double> distribution_x(x, std[0]); //set x generator at mean given by sensed x with stdev in x
@@ -44,6 +44,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	}
 	is_initialized = true;
 	timestep_count = 0;
+	prev_yawrate = 0;
 }
 
 void ParticleFilter::prediction(double delta_t, double std_pos[], double velocity, double yaw_rate) {
@@ -57,9 +58,12 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	double mean_x;
 	double mean_y;
 	double mean_theta;	
-
-	if (yaw_rate == 0) { std::cout << "yaw_rate is zero!" << std::endl; }
-	std::cout << "yaw_rate is " << yaw_rate << std::endl;
+		
+	// There is an issue at timestep 238 in the simulator, where it sends a yawrate of 62.673 radians!
+	// This throws off yawrate error. The hacks below don't seem to help.
+	//if (std::abs(yaw_rate) > 10) { //yaw_rate = prev_yawrate*1.2;
+	//std::cout << "********** yawchange ********" << endl; }
+	//std::cout << "yaw_rate is " << yaw_rate << std::endl;
 
 	for (int i = 0; i < num_particles;i++) {
 		
@@ -90,12 +94,13 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 		particles[i].y = distribution_y(generator);
 		particles[i].theta = distribution_theta(generator);
 				
-		std::cout << "**************************************** PREDICT *********************************************" << std::endl;
-		std::cout << mean_x << " " << mean_y << " " << mean_theta << endl;
-		std::cout << "Particle Data at i=" << i << ": x,y,theta" << particles[i].x << " " << particles[i].y << " " << particles[i].theta << std::endl;
+		//std::cout << "**************************************** PREDICT *********************************************" << std::endl;
+		//std::cout << mean_x << " " << mean_y << " " << mean_theta << endl;
+		//std::cout << "Particle Data at i=" << i << ": x,y,theta" << particles[i].x << " " << particles[i].y << " " << particles[i].theta << std::endl;
 	}
 	timestep_count += 1;
-	std::cout << "timestep: " << timestep_count << std::endl;
+	//std::cout << "timestep: " << timestep_count << std::endl;
+	prev_yawrate = yaw_rate;
 }
 
 void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
@@ -128,16 +133,16 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 		double y1 = particles[i].y;
 		double theta = particles[i].theta;
 		
-		std::cout << "Particle Data at i=" << i << ": x,y,theta" << particles[i].x << " " << particles[i].y << " " << particles[i].theta << std::endl;
+		//std::cout << "Particle Data at i=" << i << ": x,y,theta" << particles[i].x << " " << particles[i].y << " " << particles[i].theta << std::endl;
 
 		for (int j = 0; j < observations.size();j++) {
-
-			double x2 = x1 + observations[j].x*cos(theta) + observations[j].y*sin(theta); //convert observed (Local) coord to Global coord
-			double y2 = y1 + observations[j].x*(-sin(theta)) + observations[j].y*(-cos(theta)); //convert observed (Local) coord to Global coord
+			//std::cout << "observation " << j << " x,y: " << observations[j].x << " " << observations[j].y << endl;
+			double x2 = x1 + observations[j].x*cos(-theta) + observations[j].y*sin(-theta); //convert observed (Local) coord to Global coord
+			double y2 = y1 + observations[j].x*(-sin(-theta)) + observations[j].y*(cos(-theta)); //convert observed (Local) coord to Global coord
 			if (dist(x1, y1, x2, y2) <= sensor_range) {
 				//create a prediction add to predicted list
 				LandmarkObs pred;
-				std::cout << "x2,y2 at i=" << i << ": " << x2 << " " << y2 << std::endl;
+				//std::cout << "x2,y2 at i=" << i << ": " << x2 << " " << y2 << std::endl;
 				// Find nearest neighbour from map - using naive search, quite costly O(n)?, future considerations include quadtree search
 				double lastmin = 1000.0;
 				//std::cout << "landmarklistsize: " << map_landmarks.landmark_list.size() << endl;
@@ -151,7 +156,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 					} //end if
 				} //end for
 				predicted.push_back(pred);
-				std::cout << "pred at i=" << i << ": x,y,id: " << pred.x <<" "<< pred.y << " "<< pred.id << std::endl;
+				//std::cout << "pred at i=" << i << ": x,y,id: " << pred.x <<" "<< pred.y << " "<< pred.id << std::endl;
 			}
 		}
 		// Now have a list of identified observations in sensor range called 'predicted', with pred.x and pred.y the difference between observed x and real mapx
@@ -163,14 +168,14 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 		double coeff = 1.0 / (2.0 * M_PI*std_landmark[0] * std_landmark[1]); //1.7683
 		
 		double weight = 1.0; // initialize weight
-		std::cout << "predicted size at i=" << i << " " << predicted.size() << std::endl;
+		//std::cout << "predicted size at i=" << i << " " << predicted.size() << std::endl;
 		for (int l = 0; l < predicted.size(); l++) {
 			double xdiffsq = std::pow(predicted[l].x, 2);
 			double ydiffsq = std::pow(predicted[l].y, 2);
-			std::cout << "xdiffsq&ydiffsq&coeff at i=" << i << " and l=" << l << ": " << xdiffsq << " " << ydiffsq << " " << coeff << std::endl;
+			//std::cout << "xdiffsq&ydiffsq&coeff at i=" << i << " and l=" << l << ": " << xdiffsq << " " << ydiffsq << " " << coeff << std::endl;
 			weight *= coeff*exp(-0.5*(xdiffsq / sigxx + ydiffsq / sigyy));
 		}
-		std::cout << "calced weight at i=" << i << " " << weight << std::endl;
+		//std::cout << "calced weight at i=" << i << " " << weight << std::endl;
 		// Done calculating combined weight of all observations, assign to particle:
 		particles[i].weight = weight;
 	} // end of particle loop
@@ -181,7 +186,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	}
 	for (int i = 0; i < num_particles;i++) {
 		particles[i].weight *= 1/sum;
-		std::cout << "Norm Weight i=" << i << " " << particles[i].weight << std::endl;
+		//std::cout << "Norm Weight i=" << i << " " << particles[i].weight << std::endl;
 	}
 }
 
@@ -212,7 +217,7 @@ void ParticleFilter::resample() {
 	// Reassign all the particles to the temp particles, which should be the higher prob ones
 	for (int i = 0; i < num_particles; i++) {
 		particles[i] = p_temp[i];
-		std::cout << "Weight i="<<i<<" " << particles[i].weight << std::endl;
+		//std::cout << "Weight i="<<i<<" " << particles[i].weight << std::endl;
 	}
 }
 
