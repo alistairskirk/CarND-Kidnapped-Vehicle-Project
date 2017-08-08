@@ -64,6 +64,8 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	//if (std::abs(yaw_rate) > 10) { //yaw_rate = prev_yawrate*1.2;
 	//std::cout << "********** yawchange ********" << endl; }
 	//std::cout << "yaw_rate is " << yaw_rate << std::endl;
+	while (yaw_rate > M_PI) yaw_rate -= 2.*M_PI;
+	while (yaw_rate < -M_PI) yaw_rate += 2.*M_PI;
 
 	for (int i = 0; i < num_particles;i++) {
 		
